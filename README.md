@@ -122,14 +122,12 @@ Open `UI.html` in your browser.
 ```
 .
 ├── app.py               # Main backend API handler
-├──templates
-     └── UI.html         # Frontend UI (HTML, CSS, JS)
 ├── GeoIPlocator.py      # IP geolocation + threat intel logic
 ├── headeranalysis.py    # Email header parser + validation
 ├── URLscanner.py        # URL scanner + VirusTotal integration
+├── UI.html              # Frontend UI (HTML, CSS, JS)
 ├── requirements.txt     # Python dependencies
-└── .env                 # Sample environment variable config
-
+└── .env.example         # Sample environment variable config
 ```
 
 ---
@@ -154,5 +152,7 @@ Open `UI.html` in your browser.
 ---
 <!-- 
 ## 📬 Contact
+
 Have questions or want to contribute ideas?  
 Open an issue or reach out via pull request. -->
+---
