@@ -2,7 +2,7 @@ import re
 import email
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
-from email.message import EmailMessage  # ✅ Add this line
+from email.message import EmailMessage
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import datetime
@@ -23,6 +23,8 @@ class EmailHeaderAnalysis:
     security_indicators: List[str]
     risk_assessment: str
     analysis_summary: str
+    # Add full email content for phishing detection
+    full_email_content: str 
 
 class EmailHeaderAnalyzer:
     def __init__(self):
@@ -52,17 +54,47 @@ class EmailHeaderAnalyzer:
     def extract_sender_info(self, msg: EmailMessage) -> Dict:
         sender_info = {}
         from_header = msg.get('From', '')
-        sender_info['from'] = from_header
+        reply_to_header = msg.get('Reply-To', '')
 
+        # Extract full 'From' address
+        sender_info['from_address'] = from_header
+
+        # Extract email and domain from 'From' header
         email_match = re.search(r'<(.+?)>', from_header)
         sender_info['email'] = email_match.group(1) if email_match else from_header
-
         if '@' in sender_info['email']:
             sender_info['domain'] = sender_info['email'].split('@')[1].lower()
+        else:
+            sender_info['domain'] = '' # Default if no domain found
 
-        sender_info['reply_to'] = msg.get('Reply-To', '')
+        # Extract full 'Reply-To' address
+        sender_info['reply_to_address'] = reply_to_header
+        
+        # Check if Reply-To domain differs from From domain
+        reply_to_domain = ''
+        if '@' in reply_to_header:
+            reply_to_domain = reply_to_header.split('@')[1].lower()
+        sender_info['reply_to_differs'] = (reply_to_domain != '' and sender_info['domain'] != '' and reply_to_domain != sender_info['domain'])
+
         sender_info['return_path'] = msg.get('Return-Path', '')
         sender_info['message_id'] = msg.get('Message-ID', '')
+
+        # Extract Subject header
+        subject_header = msg.get('Subject', '')
+        decoded_subject = ''
+        try:
+            # Decode potentially encoded subject headers
+            decoded_parts = decode_header(subject_header)
+            for part, charset in decoded_parts:
+                if isinstance(part, bytes):
+                    decoded_subject += part.decode(charset or 'utf-8', errors='ignore')
+                else:
+                    decoded_subject += part
+        except Exception as e:
+            print(f"Error decoding subject: {e}")
+            decoded_subject = subject_header # Fallback to raw subject
+        sender_info['subject'] = decoded_subject
+
 
         return sender_info
 
@@ -74,15 +106,22 @@ class EmailHeaderAnalyzer:
             hop_info = {
                 'hop_number': i + 1,
                 'raw_header': received,
-                'servers': [],
+                'received_from': 'Unknown',
+                'by_server': 'Unknown',
+                'delay': 'N/A', # Placeholder for delay calculation
                 'timestamp': None,
                 'protocol': None
             }
 
-            server_matches = re.findall(r'from\s+([^\s]+)', received, re.IGNORECASE)
-            hop_info['servers'] = server_matches
+            # Extract 'from' and 'by' parts
+            from_match = re.search(r'from\s+([^\s]+)', received, re.IGNORECASE)
+            if from_match:
+                hop_info['received_from'] = from_match.group(1)
+            
+            by_match = re.search(r'by\s+([^\s]+)', received, re.IGNORECASE)
+            if by_match:
+                hop_info['by_server'] = by_match.group(1)
 
-            # ✅ FIXED LINE: Corrected the unterminated regex string
             timestamp_match = re.search(r';\s*(.+)', received)
             if timestamp_match:
                 try:
@@ -94,6 +133,17 @@ class EmailHeaderAnalyzer:
             protocol_match = re.search(r'with\s+([^\s]+)', received, re.IGNORECASE)
             if protocol_match:
                 hop_info['protocol'] = protocol_match.group(1)
+
+            # Basic delay calculation (requires previous hop's timestamp)
+            if i > 0 and routing_path[i-1]['timestamp'] and hop_info['timestamp']:
+                try:
+                    prev_time = datetime.datetime.fromisoformat(routing_path[i-1]['timestamp'])
+                    current_time = datetime.datetime.fromisoformat(hop_info['timestamp'])
+                    delay_seconds = (current_time - prev_time).total_seconds()
+                    hop_info['delay'] = f"{delay_seconds:.2f}s"
+                except Exception:
+                    pass
+
 
             routing_path.append(hop_info)
         
@@ -138,7 +188,7 @@ class EmailHeaderAnalyzer:
 
     def _extract_result(self, header_value: str) -> str:
         header_value = header_value.lower()
-        for keyword in ['pass', 'fail', 'softfail', 'neutral']:
+        for keyword in ['pass', 'fail', 'softfail', 'neutral', 'none']:
             if keyword in header_value:
                 return keyword.upper()
         return "UNKNOWN"
@@ -161,22 +211,26 @@ class EmailHeaderAnalyzer:
             indicators.append("DMARC authentication failed")
             risk_level = "HIGH"
 
-        if auth_result.spf_result == "Not Found":
-            indicators.append("No SPF record found")
+        if auth_result.spf_result == "Not Found" or auth_result.spf_result == "NONE":
+            indicators.append("No SPF record found or SPF not evaluated")
             risk_level = "MEDIUM" if risk_level == "LOW" else risk_level
 
-        if auth_result.dkim_result == "Not Found":
-            indicators.append("No DKIM signature found")
+        if auth_result.dkim_result == "Not Found" or auth_result.dkim_result == "NONE":
+            indicators.append("No DKIM signature found or DKIM not evaluated")
             risk_level = "MEDIUM" if risk_level == "LOW" else risk_level
+
+        if auth_result.dmarc_result == "Not Found" or auth_result.dmarc_result == "NONE":
+            indicators.append("No DMARC record found or DMARC not evaluated")
+            risk_level = "MEDIUM" if risk_level == "LOW" else risk_level
+
 
         from_domain = sender_info.get('domain', '')
-        reply_to = sender_info.get('reply_to', '')
+        reply_to_address = sender_info.get('reply_to_address', '')
 
-        if reply_to and '@' in reply_to:
-            reply_domain = reply_to.split('@')[1].lower()
-            if reply_domain != from_domain:
-                indicators.append(f"Reply-To domain ({reply_domain}) differs from From domain ({from_domain})")
-                risk_level = "MEDIUM" if risk_level == "LOW" else risk_level
+        if sender_info.get('reply_to_differs', False):
+            reply_domain = reply_to_address.split('@')[1].lower() if '@' in reply_to_address else ''
+            indicators.append(f"Reply-To domain ({reply_domain}) differs from From domain ({from_domain})")
+            risk_level = "MEDIUM" if risk_level == "LOW" else risk_level
 
         for header_name in self.suspicious_headers:
             if msg.get(header_name):
@@ -186,6 +240,12 @@ class EmailHeaderAnalyzer:
         if len(routing_path) > 10:
             indicators.append(f"Unusually long routing path: {len(routing_path)} hops")
             risk_level = "MEDIUM" if risk_level == "LOW" else risk_level
+        
+        # Check for discrepancies in Received headers (simplified)
+        # This is a complex check, but a basic one could be:
+        # If the 'from' part of a Received header doesn't match the actual sender IP/domain
+        # (This would require IP lookup for each hop, which is beyond simple header analysis here)
+        # For now, rely on authentication results for spoofing.
 
         return indicators, risk_level
 
@@ -208,7 +268,8 @@ class EmailHeaderAnalyzer:
             authentication=auth_result,
             security_indicators=security_indicators,
             risk_assessment=risk_level,
-            analysis_summary=summary
+            analysis_summary=summary,
+            full_email_content=email_content # Store full content for phishing detector
         )
 
     def generate_analysis_summary(self, sender_info: Dict, 
@@ -229,12 +290,13 @@ class EmailHeaderAnalyzer:
 {analysis.analysis_summary}
 
 SENDER INFORMATION:
-From: {analysis.sender_info.get('from', 'N/A')}
+From: {analysis.sender_info.get('from_address', 'N/A')}
 Email: {analysis.sender_info.get('email', 'N/A')}
 Domain: {analysis.sender_info.get('domain', 'N/A')}
-Reply-To: {analysis.sender_info.get('reply_to', 'N/A')}
+Reply-To: {analysis.sender_info.get('reply_to_address', 'N/A')}
 Return-Path: {analysis.sender_info.get('return_path', 'N/A')}
 Message-ID: {analysis.sender_info.get('message_id', 'N/A')}
+Subject: {analysis.sender_info.get('subject', 'N/A')}
 
 AUTHENTICATION RESULTS:
 SPF: {analysis.authentication.spf_result}
@@ -246,7 +308,7 @@ ROUTING PATH:
 Total Hops: {len(analysis.routing_path)}
 """
         for hop in analysis.routing_path[:5]:
-            report += f"Hop {hop['hop_number']}: {', '.join(hop['servers'])} [{hop.get('protocol', 'Unknown')}] @ {hop.get('timestamp', 'N/A')}\n"
+            report += f"Hop {hop['hop_number']}: From {hop.get('received_from', 'Unknown')} by {hop.get('by_server', 'Unknown')} [{hop.get('protocol', 'Unknown')}] @ {hop.get('timestamp', 'N/A')} (Delay: {hop.get('delay', 'N/A')})\n"
 
         if len(analysis.routing_path) > 5:
             report += f"... and {len(analysis.routing_path) - 5} more hops\n"
@@ -282,6 +344,7 @@ Authentication-Results: mx.company.com;
 Received-SPF: fail (mx.company.com: domain of suspicious-domain.tk does not designate 203.0.113.1 as permitted sender)
 
 This is a test email for header analysis.
+Click here to verify your account: http://badlink.example.com/verify
 """
     print("=== Email Header Analysis ===")
     analysis = analyzer.analyze_headers(sample_email)
