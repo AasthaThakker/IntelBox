@@ -190,7 +190,7 @@
             margin-right: 8px;
         }
 
-        /* NEW: Styling for lists within result areas to make bullets appear "inside the box" */
+        /* Styling for lists within result areas to make bullets appear "inside the box" */
         .result-area ul {
             list-style-type: disc; /* Ensure standard disc bullets */
             padding-left: 25px; /* Add padding to push bullets inside */
@@ -219,28 +219,24 @@
         <div class="tools-grid">
             <!-- Phishing Email Detector -->
             <div class="tool-card">
-                <h3>📧 Phishing Email Detector</h3>
-                <p>Analyze email content for phishing indicators using ML and heuristics.</p>
+                <h3>📧 AI Phishing Detector</h3>
+                <p>Classify emails as phishing, spam, or safe using AI and heuristic analysis.</p>
                 <ul class="feature-list">
-                    <li>Suspicious keyword detection</li>
-                    <li>URL analysis</li>
-                    <li>Pattern matching</li>
-                    <li>Risk scoring</li>
+                    <li>Header feature analysis</li>
+                    <li>Text body & subject analysis</li>
+                    <li>URL structure examination</li>
+                    <li>ML-driven classification & confidence</li>
                 </ul>
                 <div class="input-group">
-                    <label for="email-content">Email Content:</label>
-                    <textarea id="email-content" rows="4" placeholder="Paste email content here..."></textarea>
+                    <label for="phishing-email-content">Full Email Content:</label>
+                    <textarea id="phishing-email-content" rows="6" placeholder="Paste full email content (headers + body) here..."></textarea>
                 </div>
-                <div class="input-group">
-                    <label for="sender-email">Sender Email (optional):</label>
-                    <input type="email" id="sender-email" placeholder="sender@example.com">
-                </div>
-                <button class="btn" onclick="analyzeEmail()">Analyze Email</button>
-                <div class="loading" id="email-loading">
+                <button class="btn" onclick="detectPhishing()">Detect Phishing</button>
+                <div class="loading" id="phishing-loading">
                     <div class="spinner"></div>
-                    Analyzing email for phishing indicators...
+                    Analyzing email for phishing...
                 </div>
-                <div class="result-area" id="email-result"></div>
+                <div class="result-area" id="phishing-result"></div>
             </div>
             
             <!-- GeoIP Locator -->
@@ -287,7 +283,29 @@
                 <div class="result-area" id="url-result"></div>
             </div>
             
-            <!-- Email Header Analyzer -->
+            <!-- DNS & WHOIS Intelligence -->
+            <div class="tool-card">
+                <h3>🌐 DNS & WHOIS Intelligence</h3>
+                <p>Query DNS records and WHOIS information for domain analysis.</p>
+                <ul class="feature-list">
+                    <li>A, MX, SPF, NS records lookup</li>
+                    <li>WHOIS record details</li>
+                    <li>Newly registered domain detection</li>
+                    <li>Short-lifecycle domain identification</li>
+                </ul>
+                <div class="input-group">
+                    <label for="domain-input">Domain Name:</label>
+                    <input type="text" id="domain-input" placeholder="example.com">
+                </div>
+                <button class="btn" onclick="analyzeDomain()">Analyze Domain</button>
+                <div class="loading" id="domain-loading">
+                    <div class="spinner"></div>
+                    Querying DNS and WHOIS...
+                </div>
+                <div class="result-area" id="domain-result"></div>
+            </div>
+
+            <!-- Email Header Analyzer (Moved to be the last card) -->
             <div class="tool-card">
                 <h3>📋 Email Header Analyzer</h3>
                 <p>Analyze email headers for authentication and security indicators.</p>
@@ -357,103 +375,77 @@
             }, 3000); // Message disappears after 3 seconds
         }
         
-        async function analyzeEmail() {
-            const content = document.getElementById('email-content').value;
-            // const sender = document.getElementById('sender-email').value; // This field is not used by the backend currently
+        // Function to detect phishing using the new endpoint
+        async function detectPhishing() {
+            const emailContent = document.getElementById('phishing-email-content').value;
             
-            if (!content.trim()) {
-                showMessageBox('Please enter email content to analyze', 'error');
+            if (!emailContent.trim()) {
+                showMessageBox('Please paste the full email content to detect phishing.', 'error');
                 return;
             }
             
-            showLoading('email-loading');
+            showLoading('phishing-loading');
             
             try {
-                const response = await fetch('http://127.0.0.1:5000/analyze_email', {
+                // Corrected endpoint from /analyze_email to /detect_phishing
+                const response = await fetch('http://127.0.0.1:5000/detect_phishing', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: content })
+                    body: JSON.stringify({ email: emailContent })
                 });
 
                 const data = await response.json();
-                hideLoading('email-loading');
+                hideLoading('phishing-loading');
 
-                if (data.error) {
-                    showResult('email-result', `<p><strong>Error:</strong> ${data.error}</p>`, 'high');
+                if (response.status !== 200) {
+                    // If the overall API call failed, show the error
+                    showResult('phishing-result', `<p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`, 'high');
                     return;
                 }
 
-                // Determine risk level based on backend's risk_assessment or security_indicators
-                let riskLevel = 'low';
-                if (data.risk_assessment && data.risk_assessment.toLowerCase().includes('high')) {
-                    riskLevel = 'high';
-                } else if (data.risk_assessment && data.risk_assessment.toLowerCase().includes('medium')) {
-                    riskLevel = 'medium';
-                } else if (data.security_indicators && data.security_indicators.length > 0) {
-                    // If there are security indicators, it's at least medium risk
-                    riskLevel = 'medium'; 
+                // --- Display Phishing Detection Results ---
+                const phishingData = data; // Data is directly phishing detection data now
+                let phishingRiskLevel = 'low';
+                if (phishingData.risk_score >= 8) {
+                    phishingRiskLevel = 'high';
+                } else if (phishingData.risk_score >= 5) {
+                    phishingRiskLevel = 'medium';
                 }
 
-                const authStatus = data.authentication.authentication_status || 'Unknown';
-                const spfResult = data.authentication.spf_result || 'N/A';
-                const dkimResult = data.authentication.dkim_result || 'N/A';
-                const dmarcResult = data.authentication.dmarc_result || 'N/A';
-
-                let securityIndicatorsHtml = '';
-                if (data.security_indicators && data.security_indicators.length > 0) {
-                    securityIndicatorsHtml = `
-                        <h5>🚨 Security Indicators:</h5>
+                let phishingIndicatorsHtml = '';
+                if (phishingData.indicators && phishingData.indicators.length > 0) {
+                    phishingIndicatorsHtml = `
+                        <h5>🚨 Detected Indicators:</h5>
                         <ul>
-                            ${data.security_indicators.map(indicator => `<li>${indicator}</li>`).join('')}
+                            ${phishingData.indicators.map(indicator => `<li>${indicator}</li>`).join('')}
                         </ul>
                     `;
                 } else {
-                    securityIndicatorsHtml = '<p>✅ No explicit security indicators found.</p>';
+                    phishingIndicatorsHtml = '<p>✅ No specific phishing indicators detected by AI.</p>';
                 }
 
-                const result = `
-                    <h4>📊 Email Analysis Results</h4>
-                    <p><strong>Overall Risk:</strong> ${data.risk_assessment || 'N/A'}</p>
-                    <p><strong>Analysis Summary:</strong> ${data.summary || 'No summary provided.'}</p>
-                    
-                    <h5>📨 Sender Information:</h5>
-                    <p><strong>From:</strong> ${data.sender_info.from_address || 'N/A'}</p>
-                    <p><strong>Reply-To:</strong> ${data.sender_info.reply_to_address || 'N/A'}</p>
-                    <p><strong>Return-Path:</strong> ${data.sender_info.return_path || 'N/A'}</p>
-
-                    <h5>🔐 Authentication Results:</h5>
-                    <ul>
-                        <li><strong>Overall Status:</strong> ${authStatus}</li>
-                        <li><strong>SPF:</strong> ${spfResult}</li>
-                        <li><strong>DKIM:</strong> ${dkimResult}</li>
-                        <li><strong>DMARC:</strong> ${dmarcResult}</li>
-                    </ul>
-                    
-                    <h5>➡️ Routing Path:</h5>
-                    <ul>
-                        ${data.routing_path && data.routing_path.length > 0 ?
-                            data.routing_path.map(hop => `<li>${hop.received_from} (${hop.by_server}) - ${hop.delay}</li>`).join('') :
-                            '<li>No detailed routing path available.</li>'
-                        }
-                    </ul>
-
-                    ${securityIndicatorsHtml}
-
+                const phishingResultHtml = `
+                    <h4>🤖 AI Phishing Detection Results</h4>
+                    <p><strong>Classification:</strong> <span style="font-weight: bold; color: ${phishingRiskLevel === 'high' ? '#dc3545' : (phishingRiskLevel === 'medium' ? '#ffc107' : '#28a745')}">${phishingData.classification}</span></p>
+                    <p><strong>Confidence:</strong> ${(phishingData.confidence * 100).toFixed(2)}%</p>
+                    <p><strong>Risk Score:</strong> ${phishingData.risk_score}/10</p>
+                    <p><strong>Summary:</strong> ${phishingData.summary}</p>
+                    ${phishingIndicatorsHtml}
                     <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
-                        <strong>🎯 Recommendation:</strong> ${data.risk_assessment && data.risk_assessment.toLowerCase().includes('high') ? 
-                            'This email is highly suspicious. Do not interact with it, delete it, and report it if possible.' : 
-                            'Review the details carefully. If anything seems off, proceed with caution.'}
+                        <strong>🎯 Recommendation:</strong> ${phishingData.classification === 'Phishing' ? 
+                            'This email is highly likely a phishing attempt. Do NOT click links or reply. Delete it immediately.' : 
+                            (phishingData.classification === 'Spam' ? 'This is likely spam. Review carefully or delete.' : 'This email appears safe.')}
                     </div>
                 `;
                 
-                showResult('email-result', result, riskLevel);
+                showResult('phishing-result', phishingResultHtml, phishingRiskLevel);
 
             } catch (err) {
-                hideLoading('email-loading');
-                showResult('email-result', `<p><strong>Error:</strong> Failed to connect to backend or parse response: ${err.message}</p>`, 'high');
+                hideLoading('phishing-loading');
+                showResult('phishing-result', `<p><strong>Error:</strong> Failed to connect to backend or parse response: ${err.message}</p>`, 'high');
             }
         }
-        
+
         async function analyzeIP() {
             const ip = document.getElementById('ip-address').value.trim();
             if (!ip) {
@@ -517,8 +509,7 @@
             showLoading('url-loading');
             
             try {
-                // Make the actual API call to your Flask backend
-                const response = await fetch('http://127.0.0.1:5000/analyze_url', { // Changed to /analyze_url
+                const response = await fetch('http://127.0.0.1:5000/analyze_url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
@@ -527,12 +518,11 @@
                 const data = await response.json();
                 hideLoading('url-loading');
                 
-                if (response.status !== 200) { // Check for non-200 responses
+                if (response.status !== 200) {
                     showResult('url-result', `<p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`, 'high');
                     return;
                 }
                 
-                // Determine risk level based on score
                 let riskLevel = 'low';
                 if (data.risk_score >= 7) {
                     riskLevel = 'high';
@@ -540,7 +530,6 @@
                     riskLevel = 'medium';
                 }
                 
-                // Build detections list
                 let detectionsHtml = '';
                 if (data.detections && Object.keys(data.detections).length > 0) {
                     detectionsHtml = '<h5>Detections:</h5><ul>';
@@ -552,7 +541,6 @@
                     detectionsHtml = '<p>✅ No specific detections reported.</p>';
                 }
                 
-                // Build heuristic indicators list
                 let heuristicIndicatorsHtml = '';
                 if (data.additional_info && data.additional_info.heuristic_indicators && data.additional_info.heuristic_indicators.length > 0) {
                     heuristicIndicatorsHtml = '<h5>⚠️ Heuristic Indicators:</h5><ul>';
@@ -564,7 +552,6 @@
                     heuristicIndicatorsHtml = '<p>✅ No heuristic indicators found.</p>';
                 }
                 
-                // Build VirusTotal info
                 let vtHtml = '';
                 if (data.additional_info && data.additional_info.virustotal) {
                     const vt = data.additional_info.virustotal;
@@ -608,6 +595,90 @@
             }
         }
         
+        // NEW: Function to analyze domain using the new endpoint
+        async function analyzeDomain() {
+            const domain = document.getElementById('domain-input').value.trim();
+            if (!domain) {
+                showMessageBox('Please enter a domain name to analyze.', 'error');
+                return;
+            }
+
+            showLoading('domain-loading');
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/analyze_domain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain })
+                });
+
+                const data = await response.json();
+                hideLoading('domain-loading');
+
+                if (response.status !== 200) {
+                    showResult('domain-result', `<p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`, 'high');
+                    return;
+                }
+
+                let riskLevel = 'low';
+                if (data.risk_score >= 8) {
+                    riskLevel = 'high';
+                } else if (data.risk_score >= 5) {
+                    riskLevel = 'medium';
+                }
+
+                let aRecordsHtml = data.a_records && data.a_records.length > 0 ? 
+                    `<ul>${data.a_records.map(rec => `<li>${rec}</li>`).join('')}</ul>` : '<p>N/A</p>';
+                let mxRecordsHtml = data.mx_records && data.mx_records.length > 0 ? 
+                    `<ul>${data.mx_records.map(rec => `<li>${rec}</li>`).join('')}</ul>` : '<p>N/A</p>';
+                let nsRecordsHtml = data.ns_records && data.ns_records.length > 0 ? 
+                    `<ul>${data.ns_records.map(rec => `<li>${rec}</li>`).join('')}</ul>` : '<p>N/A</p>';
+                
+                let whoisInfoHtml = '';
+                if (Object.keys(data.whois_info).length > 0) {
+                    whoisInfoHtml = `
+                        <h5>WHOIS Information:</h5>
+                        <ul>
+                            <li><strong>Registrar:</strong> ${data.whois_info.registrar || 'N/A'}</li>
+                            <li><strong>Creation Date:</strong> ${data.whois_info.creation_date || 'N/A'}</li>
+                            <li><strong>Expiration Date:</strong> ${data.whois_info.expiration_date || 'N/A'}</li>
+                            <li><strong>Name Servers:</strong> ${data.whois_info.name_servers ? data.whois_info.name_servers.join(', ') : 'N/A'}</li>
+                            <li><strong>Organization:</strong> ${data.whois_info.org || 'N/A'}</li>
+                            <li><strong>Country:</strong> ${data.whois_info.country || 'N/A'}</li>
+                        </ul>
+                    `;
+                } else {
+                    whoisInfoHtml = '<p>No WHOIS information found.</p>';
+                }
+
+                const result = `
+                    <h4>🌐 DNS & WHOIS Analysis Results</h4>
+                    <p><strong>Domain:</strong> ${data.domain}</p>
+                    <p><strong>Overall Risk Score:</strong> ${data.risk_score}/10</p>
+                    <p><strong>Summary:</strong> ${data.summary}</p>
+                    <p><strong>Newly Registered:</strong> ${data.is_newly_registered ? '⚠️ Yes' : '✅ No'}</p>
+                    <p><strong>Short Lifecycle:</strong> ${data.is_short_lifecycle ? '⚠️ Yes' : '✅ No'}</p>
+
+                    <h5>A Records:</h5>${aRecordsHtml}
+                    <h5>MX Records:</h5>${mxRecordsHtml}
+                    <h5>SPF Record:</h5><p>${data.spf_record || 'N/A'}</p>
+                    <h5>NS Records:</h5>${nsRecordsHtml}
+                    ${whoisInfoHtml}
+                    <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
+                        <strong>🎯 Recommendation:</strong> ${data.risk_score >= 5 ? 
+                            'This domain shows suspicious characteristics. Exercise extreme caution when interacting with it.' : 
+                            'This domain appears normal based on DNS/WHOIS. Always verify context.'}
+                    </div>
+                `;
+                
+                showResult('domain-result', result, riskLevel);
+
+            } catch (err) {
+                hideLoading('domain-loading');
+                showResult('domain-result', `<p><strong>Error:</strong> Failed to connect to backend or parse response: ${err.message}</p>`, 'high');
+            }
+        }
+
         async function analyzeHeaders() {
             const headers = document.getElementById('email-headers').value;
             
@@ -619,43 +690,43 @@
             showLoading('headers-loading');
             
             try {
-                const response = await fetch('http://127.0.0.1:5000/analyze_email', { // Assuming analyze_email handles headers
+                // This endpoint now only handles header analysis
+                const response = await fetch('http://127.0.0.1:5000/analyze_headers', { // Changed endpoint
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: headers }) // Send headers as 'email' content
+                    body: JSON.stringify({ email: headers })
                 });
 
                 const data = await response.json();
                 hideLoading('headers-loading');
 
-                if (response.status !== 200) { // Check for non-200 responses
+                if (response.status !== 200) {
                     showResult('headers-result', `<p><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`, 'high');
                     return;
                 }
 
-                // Determine risk level based on backend's risk_assessment
-                let riskLevel = 'low';
-                if (data.risk_assessment && data.risk_assessment.toLowerCase().includes('high')) {
-                    riskLevel = 'high';
-                } else if (data.risk_assessment && data.risk_assessment.toLowerCase().includes('medium')) {
-                    riskLevel = 'medium';
+                // --- Display Header Analysis Results ---
+                const headerData = data; // Data is directly header analysis data now
+                let headerRiskLevel = 'low';
+                if (headerData.risk_assessment && headerData.risk_assessment.toLowerCase().includes('high')) {
+                    headerRiskLevel = 'high';
+                } else if (headerData.risk_assessment && headerData.risk_assessment.toLowerCase().includes('medium')) {
+                    headerRiskLevel = 'medium';
                 }
 
-                // Format authentication results
                 const authResultsHtml = `
                     <ul>
-                        <li><strong>SPF:</strong> ${data.authentication.spf_result || 'N/A'}</li>
-                        <li><strong>DKIM:</strong> ${data.authentication.dkim_result || 'N/A'}</li>
-                        <li><strong>DMARC:</strong> ${data.authentication.dmarc_result || 'N/A'}</li>
-                        <li><strong>Overall Status:</strong> ${data.authentication.authentication_status || 'N/A'}</li>
+                        <li><strong>SPF:</strong> ${headerData.authentication.spf_result || 'N/A'}</li>
+                        <li><strong>DKIM:</strong> ${headerData.authentication.dkim_result || 'N/A'}</li>
+                        <li><strong>DMARC:</strong> ${headerData.authentication.dmarc_result || 'N/A'}</li>
+                        <li><strong>Overall Status:</strong> ${headerData.authentication.authentication_status || 'N/A'}</li>
                     </ul>
                 `;
 
-                // Format routing path
                 let routingPathHtml = '';
-                if (data.routing_path && data.routing_path.length > 0) {
+                if (headerData.routing_path && headerData.routing_path.length > 0) {
                     routingPathHtml = '<h5>➡️ Routing Path:</h5><ul>';
-                    data.routing_path.forEach(hop => {
+                    headerData.routing_path.forEach(hop => {
                         routingPathHtml += `<li>From: ${hop.received_from || 'N/A'} | By: ${hop.by_server || 'N/A'} | Delay: ${hop.delay || 'N/A'}</li>`;
                     });
                     routingPathHtml += '</ul>';
@@ -663,11 +734,10 @@
                     routingPathHtml = '<p>No detailed routing path available.</p>';
                 }
 
-                // Format security indicators
                 let securityIndicatorsHtml = '';
-                if (data.security_indicators && data.security_indicators.length > 0) {
+                if (headerData.security_indicators && headerData.security_indicators.length > 0) {
                     securityIndicatorsHtml = '<h5>🚨 Security Indicators:</h5><ul>';
-                    data.security_indicators.forEach(indicator => {
+                    headerData.security_indicators.forEach(indicator => {
                         securityIndicatorsHtml += `<li>${indicator}</li>`;
                     });
                     securityIndicatorsHtml += '</ul>';
@@ -675,44 +745,36 @@
                     securityIndicatorsHtml = '<p>No specific security indicators found.</p>';
                 }
 
-                const result = `
+                const headerResultHtml = `
                     <h4>📋 Email Header Analysis</h4>
-                    <p><strong>Overall Risk Assessment:</strong> ${data.risk_assessment || 'N/A'}</p>
-                    <p><strong>Analysis Summary:</strong> ${data.analysis_summary || 'N/A'}</p>
+                    <p><strong>Overall Risk Assessment:</strong> ${headerData.risk_assessment || 'N/A'}</p>
+                    <p><strong>Analysis Summary:</strong> ${headerData.summary || 'N/A'}</p>
                     
                     <h5>🔐 Authentication Results:</h5>
                     ${authResultsHtml}
                     
                     <h5>📨 Sender Information:</h5>
-                    <p><strong>From Address:</strong> ${data.sender_info.from_address || 'N/A'}</p>
-                    <p><strong>Reply-To Address:</strong> ${data.sender_info.reply_to_address || 'N/A'}</p>
-                    <p><strong>Return Path:</strong> ${data.sender_info.return_path || 'N/A'}</p>
+                    <p><strong>From Address:</strong> ${headerData.sender_info.from_address || 'N/A'}</p>
+                    <p><strong>Reply-To Address:</strong> ${headerData.sender_info.reply_to_address || 'N/A'}</p>
+                    <p><strong>Return Path:</strong> ${headerData.sender_info.return_path || 'N/A'}</p>
+                    <p><strong>Subject:</strong> ${headerData.sender_info.subject || 'N/A'}</p>
                     
                     ${routingPathHtml}
                     ${securityIndicatorsHtml}
 
                     <div style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px;">
-                        <strong>🎯 Recommendation:</strong> ${riskLevel === 'high' ? 
+                        <strong>🎯 Recommendation:</strong> ${headerRiskLevel === 'high' ? 
                             'This email has significant header red flags. Treat with extreme suspicion and do not interact.' : 
                             'Headers appear clean, but always verify sender and content before interacting.'}
                     </div>
                 `;
                 
-                showResult('headers-result', result, riskLevel);
+                showResult('headers-result', headerResultHtml, headerRiskLevel);
 
             } catch (err) {
                 hideLoading('headers-loading');
                 showResult('headers-result', `<p><strong>Error:</strong> Failed to connect to backend or parse response: ${err.message}</p>`, 'high');
             }
-        }
-
-        // Utility function to extract "From" domain from headers (kept for completeness, though backend handles this)
-        function extractFromDomain(headers) {
-            const match = headers.match(/From:\s?.*?@([^\s>]+)/i);
-            if (match && match[1]) {
-                return match[1].trim();
-            }
-            return 'Unknown';
         }
     </script>
 </body>
