@@ -1,158 +1,166 @@
 
-# 🛡️ Cybersecurity Analysis Toolkit
+# 🛡️ IntelBox
 
-The **Cybersecurity Analysis Toolkit** is a powerful, web-based application designed to equip cybersecurity professionals, SOC analysts, and learners with a unified interface for analyzing IP addresses, scanning suspicious URLs, and decoding email headers.
-
-It simplifies threat detection by integrating **GeoIP threat intelligence**, **URL scanning**, and **email header analysis** using a responsive UI and a Python Flask-powered backend.
+The **IntelBox Toolkit** is a comprehensive, web-based application built for **SOC analysts**, **cybersecurity professionals**, and **enthusiasts**. It combines powerful threat analysis capabilities including IP geolocation, URL scanning, phishing detection, email header parsing, and domain intelligence—all within a user-friendly interface.
 
 ---
 
-## 🚀 Core Functionalities
+## 🚀 Features
 
 ### 🌍 GeoIP Locator
-- **Purpose**: Retrieves geographic and network information for any IP address.
-- **Threat Detection**:
-  - Checks for **Tor exit nodes**
-  - Matches against **known malicious IPs**
-  - Uses **VirusTotal API** to determine threat level (High, Medium, Low, Clean)
+- Retrieves geographic and ASN info for any IP
+- Detects:
+  - **Tor Exit Nodes**
+  - **Known Malicious IPs**
+  - VirusTotal-based reputation scoring
 
 ### 🔗 Malicious URL Scanner
-- **Purpose**: Analyzes URLs for phishing or malware indicators.
-- **Detection Methods**:
-  - Heuristic analysis (unusual structure, phishing patterns)
-  - Integration with **VirusTotal** for deep intelligence
-  - Outputs **risk score** and **threat category**
+- Heuristically evaluates URLs for phishing/malware
+- Integrates with **VirusTotal**
+- Returns **risk score** and **threat classification**
 
 ### 📋 Email Header Analyzer
-- **Purpose**: Parses raw email headers to reveal delivery paths and spoofing.
-- **What It Does**:
-  - Extracts sender and relay IPs
-  - Checks SPF, DKIM, DMARC authentication
-  - Flags **anomalies**, **spoofing attempts**, and suspicious headers
+- Parses raw headers to trace delivery route
+- Verifies:
+  - **SPF**, **DKIM**, **DMARC**
+  - Relay and source IPs
+- Flags spoofing/suspicious behavior
+
+### 🎣 AI-Based Phishing Detector
+- Uses machine learning to classify emails as:
+  - **Phishing**, **Spam**, or **Safe**
+- Analyzes:
+  - Subject & body content
+  - Obfuscated URLs, suspicious TLDs
+- Returns **risk score**, **confidence**, and **explanation**
+
+### 🌐 DNS & WHOIS Intelligence
+- Retrieves:
+  - **A, MX, SPF, NS** DNS records
+  - WHOIS data (registration, expiration, registrar)
+- Flags:
+  - **Recently registered** or **short-lifecycle domains**
+  - Domain anomalies or bad reputation
 
 ---
 
-## 🔁 Operational Flow
+## 🔁 Operational Workflow
 
-1. **User Input**: IP address, URL, or raw email headers are submitted via a clean web UI.
-2. **API Communication**: JavaScript sends data to Flask backend endpoints.
-3. **Backend Modules**:
-   - `GeoIPlocator.py`: IP info + threat intelligence
-   - `URLscanner.py`: Heuristic + VirusTotal URL scan
-   - `headeranalysis.py`: Parses headers and verifies sender legitimacy
-4. **Response**: Flask sends JSON analysis results back to the frontend.
-5. **UI Output**: Results are dynamically rendered with color-coded risk indicators.
-
----
-
-## 🧪 Technologies Used
-
-### Backend – Python Flask
-- `Flask`: Lightweight API routing
-- `requests`: API calls to VirusTotal and threat feeds
-- `ipaddress`: IP validation and handling
-- `email`: Parses headers natively
-- `dataclasses`: For structured data
-- `python-dotenv`: Secure API key storage
-- `flask-cors`: Enables cross-origin access
-
-### Frontend – HTML, CSS, JavaScript
-- `HTML5`: Clean structure
-- `CSS3`: Responsive layout
-- `JavaScript`: Dynamic interaction & async backend communication
+1. **User Inputs** IP, URL, email headers/content, or domain
+2. **Frontend** sends data via JavaScript to Flask endpoints
+3. **Backend Modules** process:
+   - `GeoIPlocator.py`
+   - `URLscanner.py`
+   - `headeranalysis.py`
+   - `phishing_detector.py`
+   - `dns_whois.py`
+4. **Flask API** returns JSON results
+5. **Frontend UI** displays analysis with risk indicators
 
 ---
 
-## 🛠️ Setup Instructions
+## 🧪 Tech Stack
+
+### 🖥️ Backend – Python (Flask)
+- `Flask`, `requests`, `email`, `dataclasses`, `joblib`
+- `scikit-learn`: ML pipeline
+- `dns.resolver`, `whois`: DNS & domain queries
+- `python-dotenv`: Secure key storage
+
+### 🌐 Frontend – HTML + JS
+- `HTML5`, `CSS3`, `JavaScript`
+- Responsive, minimal UI in `UI.html`
+
+---
+
+## 🛠️ Getting Started
 
 ### 1. Clone the Repository
 ```bash
-git clone <your-repository-url>
+git clone <your-repo-url>
 cd Cybersecurity-Analysis-Toolkit
 ```
 
-### 2. Backend Setup
-
-Create a virtual environment:
+### 2. Set Up Python Virtual Environment
 ```bash
 python -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
+# Activate:
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
 ```
 
-Install dependencies:
+### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure VirusTotal API
-Create a `.env` file in the root directory:
+### 4. Configure API Keys
+Create a `.env` file:
 ```env
 VIRUSTOTAL_API_KEY=your_api_key_here
 ```
+✅ Ensure `.env` is added to `.gitignore`.
 
-> ⚠️ Make sure `.env` is excluded in `.gitignore` to avoid exposing your API key.
-
----
-
-### 4. Run the Flask Server
+### 5. Run the Flask Server
 ```bash
 python app.py
 ```
+Server is accessible at: `http://127.0.0.1:5000`
 
-Server runs at: [http://127.0.0.1:5000](http://127.0.0.1:5000)
-
-### 5. Frontend Access
-Open `UI.html` in your browser.
+### 6. Launch Frontend
+Open `templates/UI.html` in a browser.
 
 ---
 
-## 💻 Usage
+## 💻 Usage Guide
 
-| Tool                  | Description |
-|-----------------------|-------------|
-| **Phishing Detector** | Paste full email content to detect spoofing/phishing |
-| **GeoIP Locator**     | Enter IP to get location, reputation, and threat score |
-| **URL Scanner**       | Submit suspicious URL for live risk analysis |
-| **Header Analyzer**   | Paste raw email headers to trace route and verify auth |
+| Tool              | Input Required         | Output Summary                                  |
+|------------------|------------------------|--------------------------------------------------|
+| **Phishing Detector** | Full email text       | Classification (Phishing/Spam/Safe), Risk Score  |
+| **GeoIP Locator**     | IP address            | Geolocation + Threat Score + Flags               |
+| **URL Scanner**       | Suspicious URL        | VirusTotal Scan + Risk & Threat Classification   |
+| **Header Analyzer**   | Raw email headers     | Relay IPs + Auth Results + Spoofing Flags        |
+| **Domain Analyzer**   | Domain name           | DNS records + WHOIS info + Lifecycle Risk        |
 
 ---
 
 ## 📂 Project Structure
 
 ```
-.
-├── app.py               # Main backend API handler
-├── GeoIPlocator.py      # IP geolocation + threat intel logic
-├── headeranalysis.py    # Email header parser + validation
-├── URLscanner.py        # URL scanner + VirusTotal integration
-├── UI.html              # Frontend UI (HTML, CSS, JS)
-├── requirements.txt     # Python dependencies
-└── .env.example         # Sample environment variable config
+Cybersecurity-Analysis-Toolkit/
+│
+├── app.py                   # Flask app main entry
+├── GeoIPlocator.py          # IP geolocation & threat detection
+├── headeranalysis.py        # Email header parser
+├── URLscanner.py            # URL threat scanner
+├── phishing_detector.py     # ML-based email classification
+├── dns_whois.py             # Domain info & DNS analysis
+├── requirements.txt         # Python dependencies
+├── phishing_model.joblib    # Trained phishing detection model
+├── phishing_vectorizer.joblib # TF-IDF vectorizer
+├── .env                     # VirusTotal API key config
+└── templates/
+    └── UI.html              # Web UI (HTML + JS)
 ```
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repo  
-2. Create your feature branch  
+We welcome contributions!
+
+1. Fork the repository
+2. Create a feature branch
    ```bash
    git checkout -b feature/your-feature
    ```
-3. Commit your changes  
+3. Make your changes & commit
    ```bash
-   git commit -m 'Add new feature'
+   git commit -m "Added feature: ..."
    ```
-4. Push to your branch  
+4. Push and submit a pull request
    ```bash
    git push origin feature/your-feature
    ```
-5. Submit a **Pull Request**
-
----
-<!-- 
-## 📬 Contact
-
-Have questions or want to contribute ideas?  
-Open an issue or reach out via pull request. -->
----
